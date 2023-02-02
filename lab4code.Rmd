@@ -1,0 +1,23 @@
+---
+title: "Lab 4"
+author: "Max Settineri"
+date: "2023-02-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(here)
+library(Metrics)
+library(kableExtra)
+library(cowplot)
+```
+
+## Data
+
+```{r}
+load(here('data', 'fish_data.Rdata')) #loading R data
+```
+
