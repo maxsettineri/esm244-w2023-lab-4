@@ -21,3 +21,82 @@ library(cowplot)
 load(here('data', 'fish_data.Rdata')) #loading R data
 ```
 
+## Single model NLS
+
+$$
+S_t=B_{t+1}-B_t+C_t
+$$
+```{r}
+surplus <- Fish_data %>% 
+  group_by(stockid) %>% 
+  select(stockid, year, TBbest, TCbest) %>% 
+  drop_na() %>% 
+  mutate(f_biomass = lead(TBbest)) %>% 
+  mutate(surplus = f_biomass - TBbest + TCbest) %>% 
+  drop_na()
+```
+
+```{r}
+one_stock <- surplus %>% 
+  filter(stockid == 'COD1f-XIV')
+
+ggplot(data = one_stock, aes(x = year, y = surplus)) +
+  geom_point(size = 3, color = 'black') +
+  theme_minimal()
+```
+
+## Step One: Select a model
+
+$$
+\hat{S_t}=-e*MSY(\frac{B_t}{K}\ln(\frac{B_t}{K}))
+$$
+
+```{r}
+fox <- function(m, carry, biomass){
+  out = -2.718 * m * (biomass/carry) * log(biomass/carry)
+  
+  return(out)
+}
+```
+
+## Step 2: Initial guess
+
+```{r}
+guess_vec = c(max(one_stock$TBbest)*0.37,
+              max(one_stock$TBbest))
+```
+
+## Step 3: Run NLS
+
+```{r}
+one_stock_nls = nls(surplus ~ fox(m, carry, TBbest),
+                    data = one_stock,
+                    start = list(m = guess_vec[1], carry = guess_vec[2]),
+                    trace = TRUE)
+```
+
+```{r}
+one_stock_predict <- one_stock %>% 
+  mutate(predict = predict(one_stock_nls, newdata = .))
+
+ggplot(data = one_stock_predict) +
+  geom_point(aes(x = year, y = surplus)) + 
+  geom_point(aes(x = year, y = predict), color = 'red')
+```
+
+```{r}
+control_nls = nls(surplus ~ fox(m, carry, TBbest),
+                  data = one_stock,
+                  start = list(m = guess_vec[1], carry = guess_vec[2]),
+                  trace = TRUE,
+                  control = nls.control(tol = 2.1e-9))
+
+broom::tidy(control_nls) %>% 
+  kable(caption = 'control NLS') %>% 
+  kable_classic()
+
+broom::tidy(one_stock_nls) %>% 
+  kable(caption = 'one stock NLS') %>% 
+  kable_classic()
+```
+
