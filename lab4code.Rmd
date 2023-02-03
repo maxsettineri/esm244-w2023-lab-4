@@ -100,3 +100,61 @@ broom::tidy(one_stock_nls) %>%
   kable_classic()
 ```
 
+## Using purrr to run many nls models
+
+```{r}
+all_nls_fcn <- function(surplus_df){
+  nls(surplus ~ fox(m, carry, TBbest),
+      data = surplus_df, 
+      start = list(m = max(surplus_df$TBbest) * 0.37, carry = max(surplus_df$TBbest)
+                   ))
+}
+
+all_nls_fcn(one_stock)
+```
+
+```{r}
+fox_all <- surplus %>% 
+  group_by(stockid) %>% 
+  nest() %>% 
+  mutate(nls_model = map(data, ~all_nls_fcn(.x))) %>% 
+  mutate(predictions = map2(nls_model, data, ~predict(.x, newdata = .y))) %>% 
+  mutate(rmse = map2_dbl(predictions, data, ~rmse(.x, .y$surplus)))
+```
+
+## Graph the top 5 best fit model
+
+```{r}
+plots <- fox_all %>% 
+  arrange(rmse) %>% 
+  head(5) %>% 
+  mutate(graph = map2(data, predictions,
+                      ~ggplot() +
+                        geom_point(data = .x, aes(x = year, y= surplus, color = 'Actual')) +
+                        geom_point(aes(x = .x$year, y = .y, color = 'Predicted')) +
+                        theme_minimal() +
+                        xlab(' ') +
+                        ylab('Surplus') +
+                        scale_color_manual(name = 'Legend', breaks = c('Actual', 'Predicted'), values = c('Actual' = 'black', 'Predicted' = 'red'))))
+
+plot_list = plots$graph
+
+cowplot::plot_grid(plotlist = plot_list, labels = c( plots$stockid,""), hjust = -0.5,vjust = 1)
+```
+
+```{r}
+legend <- get_legend(plots$graph[[1]])
+
+for(i in 1:length(plots$graph)){
+  plots$graph[[i]] <- plots$graph[[i]] + theme(legend.position = "none")
+}
+
+#Make a new list
+plot_legend = plots$graph
+
+#create a new plot in the empty space of cowplot grids and fill it with the legend info we took from the plots.
+plot_legend[[6]] <- legend
+
+cowplot::plot_grid(plotlist = plot_legend, labels = c( plots$stockid,""), hjust = -0.5, vjust = 1)
+```
+
